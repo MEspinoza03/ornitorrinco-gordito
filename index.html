@@ -1,0 +1,407 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="Ornitorrinco 3D caricaturesco que camina: WASD/flechas o joystick, Shift para trotar.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cellipse cx='30' cy='36' rx='24' ry='20' fill='%232FB8A7'/%3E%3Cellipse cx='52' cy='40' rx='11' ry='7' fill='%23F2A000'/%3E%3Ccircle cx='34' cy='22' r='7' fill='%23fff'/%3E%3Ccircle cx='36' cy='22' r='4' fill='%2317121B'/%3E%3C/svg%3E">
+<style>body{margin:0}</style>
+</head>
+<body>
+<title>Ornitorrinco Gordito</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: una sola pantalla — cabecera fina; patio 3D con cuadrícula de 50 cm; joystick abajo a la izquierda,
+   botones de cámara abajo al centro, ficha plegable arriba a la derecha. */
+:root {
+  --bg: #dfe3e4; --bg-2: #eef1f1; --fg: #1b2526; --muted: #5b6a6b; --line: #c3cbcc;
+  --panel: rgba(247, 249, 249, 0.86); --accent: #0f8d7f; --accent-fg: #ffffff; --beak: #e08f00;
+  --grid: #b9c3c4; --grid-major: #9fadae;
+  --shadow: 0 6px 24px rgba(20, 40, 40, 0.12);
+  --f-display: "Space Grotesk", "Segoe UI", system-ui, sans-serif;
+  --f-body: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #161c1d; --bg-2: #1f2728; --fg: #e6eded; --muted: #93a3a4; --line: #334142;
+    --panel: rgba(28, 36, 37, 0.86); --accent: #3fc9b8; --accent-fg: #0d1a1a; --beak: #ffb52e;
+    --grid: #2b3637; --grid-major: #3d4b4c; --shadow: 0 6px 24px rgba(0, 0, 0, 0.45); color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #161c1d; --bg-2: #1f2728; --fg: #e6eded; --muted: #93a3a4; --line: #334142;
+  --panel: rgba(28, 36, 37, 0.86); --accent: #3fc9b8; --accent-fg: #0d1a1a; --beak: #ffb52e;
+  --grid: #2b3637; --grid-major: #3d4b4c; --shadow: 0 6px 24px rgba(0, 0, 0, 0.45); color-scheme: dark;
+}
+html, body { height: 100%; }
+[hidden] { display: none !important; }
+body {
+  background: radial-gradient(120% 90% at 50% 40%, var(--bg-2), var(--bg)); background-color: var(--bg);
+  color: var(--fg); font-family: var(--f-body); font-size: 14px;
+  display: flex; flex-direction: column; overflow: hidden;
+}
+header {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+  padding-block: 14px 6px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+h1 { font-family: var(--f-display); font-weight: 700; font-size: clamp(20px, 3vw, 26px); margin: 0; letter-spacing: -0.01em; }
+h1 span { color: var(--beak); }
+.sub { color: var(--muted); font-size: 13px; margin: 2px 0 0; }
+.keys { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; color: var(--muted); font-size: 12.5px; }
+kbd {
+  font-family: var(--f-mono); font-size: 11.5px; color: var(--fg); background: var(--panel);
+  border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 6px; padding: 2px 6px;
+}
+.stage { position: relative; flex: 1; min-height: 0; }
+canvas { display: block; width: 100%; height: 100%; touch-action: none; outline: none; }
+.status {
+  position: absolute; inset: 0; display: grid; place-items: center; color: var(--muted);
+  font-family: var(--f-mono); font-size: 13px; pointer-events: none; text-align: center; padding: 16px;
+}
+.panel {
+  background: var(--panel); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  border: 1px solid var(--line); box-shadow: var(--shadow);
+}
+.bar {
+  position: absolute; left: 50%; transform: translateX(-50%);
+  bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+  display: flex; gap: 6px; flex-wrap: wrap; justify-content: center;
+  border-radius: 14px; padding: 6px; max-width: calc(100% - 200px);
+}
+.bar button {
+  font: 500 13px var(--f-body); color: var(--fg); background: transparent; border: 0;
+  border-radius: 9px; padding: 8px 12px; cursor: pointer;
+}
+.bar button:hover { background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.bar button[aria-pressed="true"] { background: var(--accent); color: var(--accent-fg); }
+button:focus-visible, summary:focus-visible, .joy:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.joy {
+  position: absolute; left: max(16px, env(safe-area-inset-left, 0px)); bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+  width: 124px; height: 124px; border-radius: 50%; touch-action: none; user-select: none; cursor: grab;
+}
+.joy .knob {
+  position: absolute; left: 50%; top: 50%; width: 52px; height: 52px; margin: -26px 0 0 -26px; border-radius: 50%;
+  background: var(--accent); box-shadow: var(--shadow); transition: transform 0.12s ease-out;
+}
+.joy.active .knob { transition: none; }
+.joy .lbl {
+  position: absolute; inset: auto 0 -2px 0; text-align: center; font-size: 10.5px; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--muted); transform: translateY(100%); padding-top: 4px;
+}
+.run {
+  position: absolute; right: max(16px, env(safe-area-inset-right, 0px)); bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+  width: 72px; height: 72px; border-radius: 50%; font: 600 12px var(--f-body); color: var(--fg); cursor: pointer;
+  touch-action: none;
+}
+.run[aria-pressed="true"] { background: var(--beak); color: #1b1200; border-color: transparent; }
+details.spec {
+  position: absolute; top: 10px; right: max(16px, env(safe-area-inset-right, 0px));
+  border-radius: 12px; width: min(250px, calc(100vw - 32px)); font-size: 12.5px;
+}
+details.spec summary {
+  cursor: pointer; padding: 10px 14px; font: 600 11px var(--f-body); text-transform: uppercase;
+  letter-spacing: 0.08em; color: var(--muted); list-style: none;
+}
+details.spec summary::-webkit-details-marker { display: none; }
+details.spec summary::after { content: "＋"; float: right; }
+details.spec[open] summary::after { content: "－"; }
+dl { display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; margin: 0; padding: 0 14px 12px; }
+dt { color: var(--muted); }
+dd { margin: 0; text-align: right; font-family: var(--f-mono); font-variant-numeric: tabular-nums; font-size: 12px; }
+.hud {
+  position: absolute; left: max(16px, env(safe-area-inset-left, 0px)); top: 10px;
+  font-family: var(--f-mono); font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums;
+  border-radius: 10px; padding: 6px 10px;
+}
+.hud b { color: var(--fg); font-weight: 500; }
+@media (pointer: fine) { .run { display: none; } }
+@media (max-width: 640px) {
+  .keys { display: none; }
+  details.spec { top: 52px; }
+  .bar { left: auto; right: max(16px, env(safe-area-inset-right, 0px)); transform: none; bottom: calc(96px + env(safe-area-inset-bottom, 0px)); max-width: 180px; }
+  .bar button { padding: 7px 9px; font-size: 12px; }
+}
+</style>
+
+<header>
+  <div>
+    <h1>Ornitorrinco <span>Gordito</span></h1>
+    <p class="sub">Personaje 3D con esqueleto · camina por el patio</p>
+  </div>
+  <div class="keys" aria-label="Controles de teclado">
+    <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> o flechas: caminar · <kbd>Shift</kbd>: trotar · arrastrar: cámara
+  </div>
+</header>
+
+<main class="stage" id="stage">
+  <canvas id="scene" tabindex="0" aria-label="Escena 3D. Haz clic y usa W A S D o las flechas para caminar; arrastra para mover la cámara."></canvas>
+  <div class="status" id="status">Cargando modelo…</div>
+
+  <div class="hud panel" id="hud" aria-live="off"><b id="hud-state">Reposo</b> · <span id="hud-speed">0,00</span> m/s</div>
+
+  <details class="spec panel" id="spec">
+    <summary>Ficha técnica</summary>
+    <dl>
+      <dt>Largo × ancho × alto</dt><dd>1,48 × 0,70 × 0,81 m</dd>
+      <dt>Triángulos</dt><dd>66 304</dd>
+      <dt>Huesos</dt><dd>14</dd>
+      <dt>Animaciones</dt><dd>Reposo · Caminar</dd>
+      <dt>Ciclo de paso</dt><dd>0,80 s</dd>
+      <dt>Velocidad al paso</dt><dd>0,34 m/s</dd>
+      <dt>GLB animado (Draco)</dt><dd>269 KB</dd>
+      <dt>Frente / arriba</dt><dd>+Z / +Y</dd>
+    </dl>
+  </details>
+
+  <div class="joy panel" id="joy" role="application" aria-label="Joystick: arrastra para caminar">
+    <div class="knob" id="knob"></div>
+  </div>
+  <button class="run panel" id="run" aria-pressed="false">Trotar</button>
+
+  <nav class="bar panel" aria-label="Cámara">
+    <button id="v-tq" data-view="tq">Tres cuartos</button>
+    <button id="v-front" data-view="front">Frente</button>
+    <button id="v-side" data-view="side">Lado</button>
+    <button id="v-back" data-view="back">Atrás</button>
+  </nav>
+</main>
+
+<script id="glb-data" type="text/plain" data-src="modelo/ornitorrinco_animado.glb"></script>
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/"
+} }
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+
+const WALK_SPEED = 0.342;      // m/s medidos en Blender: el pie apoyado no patina a timeScale 1
+const RUN_FACTOR = 1.7;
+const TURN_RATE = 7.0;                 // rad/s
+const ARENA = 18;                      // radio del patio (m)
+
+const $ = id => document.getElementById(id);
+const statusEl = $('status'), stage = $('stage'), canvas = $('scene');
+const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+let renderer;
+try { renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true }); }
+catch (e) { statusEl.textContent = 'Este navegador no puede mostrar WebGL. Prueba con Chrome, Firefox o Safari actualizados.'; throw e; }
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.NeutralToneMapping;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+const scene = new THREE.Scene();
+const pmrem = new THREE.PMREMGenerator(renderer);
+scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+scene.environmentIntensity = 0.55;
+
+const KEY_OFFSET = new THREE.Vector3(-1.3, 3.2, 2.6);
+const key = new THREE.DirectionalLight(0xfff3e6, 1.7);
+key.castShadow = true;
+key.shadow.mapSize.set(2048, 2048);
+Object.assign(key.shadow.camera, { left: -1.4, right: 1.4, top: 1.4, bottom: -1.4, near: 0.5, far: 9 });
+key.shadow.bias = -0.0004; key.shadow.normalBias = 0.02;
+scene.add(key, key.target);
+const rim = new THREE.DirectionalLight(0xe6f0ff, 0.9);
+rim.position.set(1.6, 2.0, -2.6);
+scene.add(rim);
+
+const ground = new THREE.Mesh(new THREE.CircleGeometry(ARENA + 4, 96), new THREE.ShadowMaterial({ opacity: 0.2 }));
+ground.rotation.x = -Math.PI / 2;
+ground.receiveShadow = true;
+scene.add(ground);
+
+// cuadrícula de 50 cm con líneas mayores cada 2 m; colores tomados del tema
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+let grid, gridMajor;
+function buildGrid() {
+  if (grid) scene.remove(grid, gridMajor);
+  const size = ARENA * 2;
+  grid = new THREE.GridHelper(size, size * 2, css('--grid'), css('--grid'));
+  gridMajor = new THREE.GridHelper(size, size / 2, css('--grid-major'), css('--grid-major'));
+  for (const g of [grid, gridMajor]) { g.material.transparent = true; g.material.opacity = 0.55; g.position.y = 0.001; }
+  gridMajor.position.y = 0.002;
+  scene.add(grid, gridMajor);
+}
+buildGrid();
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', buildGrid);
+new MutationObserver(buildGrid).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+
+const camera = new THREE.PerspectiveCamera(32, 1, 0.05, 80);
+const controls = new OrbitControls(camera, canvas);
+controls.enableDamping = true;
+controls.minDistance = 1.4; controls.maxDistance = 9;
+controls.maxPolarAngle = Math.PI * 0.48;
+controls.enablePan = false;
+
+// personaje
+const actor = new THREE.Group();
+scene.add(actor);
+let yaw = 0, mixer = null, idleA = null, walkA = null, walkW = 0;
+const LOOK_H = 0.42;
+controls.target.set(0, LOOK_H, 0);
+
+const VIEWS = { tq: { az: -38, el: 16 }, front: { az: 0, el: 8 }, side: { az: -90, el: 6 }, back: { az: -140, el: 20 } };
+let tween = null;
+function viewPos(v) {
+  const a = yaw + THREE.MathUtils.degToRad(v.az), e = THREE.MathUtils.degToRad(v.el);
+  const fitH = 1.3 / (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)));
+  const fitW = 2.1 / (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * camera.aspect);
+  const d = Math.max(fitH, fitW) * 1.2;
+  return new THREE.Vector3(Math.sin(a) * Math.cos(e), Math.sin(e), Math.cos(a) * Math.cos(e)).multiplyScalar(d).add(controls.target);
+}
+function setView(name, instant = false) {
+  const to = viewPos(VIEWS[name]);
+  if (instant || reduceMotion) { camera.position.copy(to); tween = null; return; }
+  tween = { from: camera.position.clone().sub(controls.target), to: to.clone().sub(controls.target), t0: performance.now(), ms: 700 };
+}
+document.querySelectorAll('[data-view]').forEach(b => b.addEventListener('click', () => setView(b.dataset.view)));
+controls.addEventListener('start', () => { tween = null; });
+
+function resize() {
+  const w = stage.clientWidth, h = stage.clientHeight;
+  if (!w || !h) return;
+  renderer.setSize(w, h, false);
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+}
+new ResizeObserver(resize).observe(stage);
+resize();
+setView('tq', true);
+$('spec').open = matchMedia('(min-width: 900px)').matches;
+
+// ── entrada: teclado + joystick + botón trotar
+const keys = new Set();
+const KEYMAP = { KeyW: 'f', ArrowUp: 'f', KeyS: 'b', ArrowDown: 'b', KeyA: 'l', ArrowLeft: 'l', KeyD: 'r', ArrowRight: 'r' };
+addEventListener('keydown', e => {
+  if (KEYMAP[e.code]) { keys.add(KEYMAP[e.code]); e.preventDefault(); }
+  if (e.key === 'Shift') keys.add('run');
+});
+addEventListener('keyup', e => { if (KEYMAP[e.code]) keys.delete(KEYMAP[e.code]); if (e.key === 'Shift') keys.delete('run'); });
+addEventListener('blur', () => keys.clear());
+canvas.addEventListener('pointerdown', () => canvas.focus({ preventScroll: true }));
+
+const joy = $('joy'), knob = $('knob');
+const joyVec = new THREE.Vector2();
+let joyId = null;
+function joyMove(e) {
+  const r = joy.getBoundingClientRect(), R = r.width / 2 - 14;
+  let dx = e.clientX - (r.left + r.width / 2), dy = e.clientY - (r.top + r.height / 2);
+  const m = Math.hypot(dx, dy);
+  if (m > R) { dx *= R / m; dy *= R / m; }
+  knob.style.transform = `translate(${dx}px, ${dy}px)`;
+  joyVec.set(dx / R, -dy / R);
+}
+joy.addEventListener('pointerdown', e => { joyId = e.pointerId; joy.setPointerCapture(joyId); joy.classList.add('active'); joyMove(e); });
+joy.addEventListener('pointermove', e => { if (e.pointerId === joyId) joyMove(e); });
+const joyEnd = e => { if (e.pointerId !== joyId) return; joyId = null; joyVec.set(0, 0); knob.style.transform = ''; joy.classList.remove('active'); };
+joy.addEventListener('pointerup', joyEnd);
+joy.addEventListener('pointercancel', joyEnd);
+const runBtn = $('run');
+let runToggle = false;
+runBtn.addEventListener('click', () => { runToggle = !runToggle; runBtn.setAttribute('aria-pressed', String(runToggle)); });
+
+// ── modelo: GLB incrustado en base64 (visor autocontenido) o archivo Draco (data-src, p. ej. GitHub Pages)
+const onModel = gltf => {
+  gltf.scene.traverse(o => { if (o.isMesh) { o.castShadow = true; o.frustumCulled = false; } });
+  actor.add(gltf.scene);
+  mixer = new THREE.AnimationMixer(gltf.scene);
+  const clip = n => gltf.animations.find(a => a.name === n);
+  idleA = mixer.clipAction(clip('Reposo')); walkA = mixer.clipAction(clip('Caminar'));
+  idleA.play(); walkA.play();
+  walkA.setEffectiveWeight(0);
+  statusEl.hidden = true;
+};
+const onModelError = err => { statusEl.textContent = 'No se pudo leer el modelo: ' + (err && err.message ? err.message : err); };
+const dataEl = $('glb-data');
+const loader = new GLTFLoader();
+if (dataEl.dataset.src) {
+  const { DRACOLoader } = await import('three/addons/loaders/DRACOLoader.js');
+  const draco = new DRACOLoader();
+  draco.setDecoderPath('https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/libs/draco/gltf/');
+  loader.setDRACOLoader(draco);
+  loader.load(dataEl.dataset.src, onModel, undefined, onModelError);
+} else {
+  const bin = Uint8Array.from(atob(dataEl.textContent.trim()), c => c.charCodeAt(0));
+  loader.parse(bin.buffer, '', onModel, onModelError);
+}
+
+// ── bucle
+const clock = new THREE.Clock();
+const fwd = new THREE.Vector3(), right = new THREE.Vector3(), move = new THREE.Vector3(), UP = new THREE.Vector3(0, 1, 0);
+const hudState = $('hud-state'), hudSpeed = $('hud-speed');
+const ease = t => 1 - Math.pow(1 - t, 3);
+let lastHud = '';
+function angleDiff(a, b) { return Math.atan2(Math.sin(b - a), Math.cos(b - a)); }
+
+renderer.setAnimationLoop(() => {
+  const dt = Math.min(clock.getDelta(), 0.05);
+
+  // dirección relativa a la cámara
+  const ix = (keys.has('r') ? 1 : 0) - (keys.has('l') ? 1 : 0) + joyVec.x;
+  const iy = (keys.has('f') ? 1 : 0) - (keys.has('b') ? 1 : 0) + joyVec.y;
+  const mag = Math.min(1, Math.hypot(ix, iy));
+  camera.getWorldDirection(fwd); fwd.y = 0; fwd.normalize();
+  right.crossVectors(fwd, UP).normalize();
+  move.copy(fwd).multiplyScalar(iy).addScaledVector(right, ix);
+
+  let speed = 0;
+  const running = keys.has('run') || runToggle;
+  if (mag > 0.08) {
+    const target = Math.atan2(move.x, move.z);
+    const d = angleDiff(yaw, target);
+    yaw += Math.sign(d) * Math.min(Math.abs(d), TURN_RATE * dt);
+    // avanza menos mientras gira mucho: evita que patine de lado
+    const align = Math.max(0, Math.cos(d));
+    speed = WALK_SPEED * mag * (running ? RUN_FACTOR : 1) * (0.35 + 0.65 * align);
+  }
+  const before = actor.position.clone();
+  actor.rotation.y = yaw;
+  actor.position.x += Math.sin(yaw) * speed * dt;
+  actor.position.z += Math.cos(yaw) * speed * dt;
+  const r = Math.hypot(actor.position.x, actor.position.z);
+  if (r > ARENA) actor.position.multiplyScalar(ARENA / r);
+  const delta = actor.position.clone().sub(before);
+
+  // cámara y luz siguen al personaje
+  controls.target.add(delta);
+  camera.position.add(delta);
+  if (tween) {
+    const t = Math.min(1, (performance.now() - tween.t0) / tween.ms);
+    camera.position.copy(controls.target).add(tween.from.clone().lerp(tween.to, ease(t)));
+    if (t >= 1) tween = null;
+  }
+  key.position.copy(actor.position).add(KEY_OFFSET);
+  key.target.position.copy(actor.position);
+
+  // mezcla Reposo ↔ Caminar; el ritmo del paso acompaña la velocidad real
+  if (mixer) {
+    const moving = speed > 0.01;
+    walkW += ((moving ? 1 : 0) - walkW) * Math.min(1, dt * 8);
+    walkA.setEffectiveWeight(walkW);
+    idleA.setEffectiveWeight(1 - walkW);
+    walkA.timeScale = moving ? Math.max(0.45, speed / WALK_SPEED) : 1;
+    mixer.update(dt);
+  }
+  const label = speed > 0.01 ? (running ? 'Trotando' : 'Caminando') : 'Reposo';
+  const sp = speed.toFixed(2).replace('.', ',');
+  if (label + sp !== lastHud) { hudState.textContent = label; hudSpeed.textContent = sp; lastHud = label + sp; }
+
+  controls.update();
+  renderer.render(scene, camera);
+});
+</script>
+
+</body>
+</html>
